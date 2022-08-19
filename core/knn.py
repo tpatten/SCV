@@ -1,4 +1,4 @@
-import faiss
+import faiss  # Needs to be version 1.6.4!
 import torch
 
 res = faiss.StandardGpuResources()

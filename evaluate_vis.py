@@ -9,6 +9,7 @@ import numpy as np
 import torch
 import torch.nn.functional as F
 import matplotlib.pyplot as plt
+from tqdm import tqdm
 
 from sparsenet import SparseNet
 
@@ -23,12 +24,15 @@ from PIL import Image, ImageDraw, ImageFont
 
 import csv
 
+
+DATASET_ROOT = '/home/tpatten/Data/Opticalflow/Sintel'
+
 @torch.no_grad()
 def create_sintel_submission(model, warm_start=False, output_path='sintel_submission'):
     """ Create submission for the Sintel leaderboard """
     model.eval()
     for dstype in ['clean', 'final']:
-        test_dataset = datasets.MpiSintel(split='test', aug_params=None, dstype=dstype)
+        test_dataset = datasets.MpiSintel(split='test', aug_params=None, dstype=dstype, root=DATASET_ROOT)
 
         flow_prev, sequence_prev = None, None
         for test_id in range(len(test_dataset)):
@@ -60,7 +64,7 @@ def create_sintel_submission_vis(model, warm_start=False, output_path='sintel_su
     """ Create submission for the Sintel leaderboard """
     model.eval()
     for dstype in ['clean', 'final']:
-        test_dataset = datasets.MpiSintel(split='test', aug_params=None, dstype=dstype)
+        test_dataset = datasets.MpiSintel(split='test', aug_params=None, dstype=dstype, root=DATASET_ROOT)
 
         flow_prev, sequence_prev = None, None
         for test_id in range(len(test_dataset)):
@@ -152,7 +156,7 @@ def validate_chairs(model, iters=6):
 def gen_sintel_image():
     """ Peform validation using the Sintel (train) split """
     for dstype in ['clean', 'final']:
-        val_dataset = datasets.MpiSintel(split='training', dstype=dstype)
+        val_dataset = datasets.MpiSintel(split='training', dstype=dstype, root=DATASET_ROOT)
         for val_id in range(len(val_dataset)):
             image1, image2, flow_gt, _, (sequence, frame) = val_dataset[val_id]
             image1 = image1.byte().permute(1,2,0)
@@ -163,7 +167,7 @@ def gen_sintel_image():
 def gen_sintel_gt():
     """ Peform validation using the Sintel (train) split """
     for dstype in ['clean', 'final']:
-        val_dataset = datasets.MpiSintel(split='training', dstype=dstype)
+        val_dataset = datasets.MpiSintel(split='training', dstype=dstype, root=DATASET_ROOT)
         for val_id in range(len(val_dataset)):
             image1, image2, flow_gt, _, (sequence, frame) = val_dataset[val_id]
 
@@ -178,31 +182,36 @@ def validate_sintel(model, warm_start=False, iters=6):
     """ Peform validation using the Sintel (train) split """
     model.eval()
     results = {}
-    font = ImageFont.truetype("FUTURAL.ttf", 40)
+    #font = ImageFont.truetype("FUTURAL.ttf", 40)
+    font = ImageFont.load_default()
     for dstype in ['clean', 'final']:
-        val_dataset = datasets.MpiSintel(split='training', dstype=dstype)
+        val_dataset = datasets.MpiSintel(split='training', dstype=dstype, root=DATASET_ROOT)
         epe_list = []
         flow_prev, sequence_prev = None, None
-        for val_id in range(len(val_dataset)):
-            image1, image2, flow_gt, _, (sequence, frame) = val_dataset[val_id]
+        for val_id in tqdm(range(len(val_dataset))):
+            #image1, image2, flow_gt, _, (sequence, frame) = val_dataset[val_id]
+            image1, image2, flow_gt, _ = val_dataset[val_id]
+            #print(image1.shape, flow_gt.shape)  # torch.Size([3, 436, 1024]) torch.Size([2, 436, 1024])
             image1 = image1[None].to(f'cuda:{model.device_ids[0]}')
             image2 = image2[None].to(f'cuda:{model.device_ids[0]}')
-            if sequence != sequence_prev:
-                flow_prev = None
+            #if sequence != sequence_prev:
+            #    flow_prev = None
 
             padder = InputPadder(image1.shape)
             image1, image2 = padder.pad(image1, image2)
 
-            flow_low, flow_pr = model.module(image1, image2, iters=iters, flow_init=flow_prev, test_mode=True)
+            #flow_low, flow_pr = model.module(image1, image2, iters=iters, flow_init=flow_prev, test_mode=True)
+            flow_pr = model.module(image1, image2, iters=iters, test_mode=True)
+            # print(image1.shape, flow_pr.shape)  # torch.Size([1, 3, 440, 1024]) torch.Size([1, 2, 440, 1024])
             flow = padder.unpad(flow_pr[0]).cpu()
 
-            if warm_start:
-                flow_prev = forward_interpolate(flow_low[0])[None].cuda()
+            #if warm_start:
+            #    flow_prev = forward_interpolate(flow_low[0])[None].cuda()
 
             epe = torch.sum((flow - flow_gt)**2, dim=0).sqrt()
             epe_list.append(epe.view(-1).numpy())
 
-            sequence_prev = sequence
+            #sequence_prev = sequence
 
             # Visualizations
             output_flow = flow.permute(1, 2, 0).numpy()
@@ -221,17 +230,18 @@ def validate_sintel(model, warm_start=False, iters=6):
             if not os.path.exists(f'vis/gt/{dstype}/'):
                 os.makedirs(f'vis/gt/{dstype}/flow')
                 os.makedirs(f'vis/gt/{dstype}/image')
+            '''
+            image.save(f'vis/RAFT/{dstype}/flow/{val_id}_{epe.view(-1).mean().item():.3f}.png')
+            imageio.imwrite(f'vis/RAFT/{dstype}/error/{val_id}_{epe.view(-1).mean().item():.3f}.png', epe.numpy())
 
-            # image.save(f'vis/RAFT/{dstype}/flow/{val_id}_{epe.view(-1).mean().item():.3f}.png')
-            # imageio.imwrite(f'vis/RAFT/{dstype}/error/{val_id}_{epe.view(-1).mean().item():.3f}.png', epe.numpy())
+            image.save(f'vis/ours/{dstype}/flow/{val_id}_{epe.view(-1).mean().item():.3f}.png')
+            imageio.imwrite(f'vis/ours/{dstype}/error/{val_id}_{epe.view(-1).mean().item():.3f}.png', epe.numpy())
 
-            # image.save(f'vis/ours/{dstype}/flow/{val_id}_{epe.view(-1).mean().item():.3f}.png')
-            # imageio.imwrite(f'vis/ours/{dstype}/error/{val_id}_{epe.view(-1).mean().item():.3f}.png', epe.numpy())
-
-            # flow_gt_vis = flow_gt.permute(1, 2, 0).numpy()
-            # flow_gt_vis = flow_viz.flow_to_image(flow_gt_vis)
-            # imageio.imwrite(f'vis/gt/{dstype}/flow/{val_id}.png', flow_gt_vis)
-            # imageio.imwrite(f'vis/gt/{dstype}/image/{val_id}.png', image1[0].cpu().permute(1,2,0).numpy())
+            flow_gt_vis = flow_gt.permute(1, 2, 0).numpy()
+            flow_gt_vis = flow_viz.flow_to_image(flow_gt_vis)
+            imageio.imwrite(f'vis/gt/{dstype}/flow/{val_id}.png', flow_gt_vis)
+            imageio.imwrite(f'vis/gt/{dstype}/image/{val_id}.png', image1[0].cpu().permute(1,2,0).numpy())
+            '''
 
         epe_all = np.concatenate(epe_list)
 
@@ -251,16 +261,18 @@ def validate_sintel_sequence(model, warm_start=False, iters=6):
     """ Peform validation using the Sintel (train) split """
     model.eval()
     results = {}
-    font = ImageFont.truetype("FUTURAL.ttf", 40)
+    #font = ImageFont.truetype("FUTURAL.ttf", 40)
+    font = ImageFont.load_default()
     for dstype in ['clean', 'final']:
-        val_dataset = datasets.MpiSintel(split='training', dstype=dstype)
+        val_dataset = datasets.MpiSintel(split='training', dstype=dstype, root=DATASET_ROOT)
         epe_list = []
-        flow_prev, sequence_prev = None, None
+        #flow_prev, sequence_prev = None, None
 
         all_seq_epe_list = []
         per_seq_epe_list = []
         for val_id in range(len(val_dataset)):
-            image1, image2, flow_gt, _, (sequence, frame) = val_dataset[val_id]
+            #image1, image2, flow_gt, _, (sequence, frame) = val_dataset[val_id]
+            image1, image2, flow_gt, _ = val_dataset[val_id]
             image1 = image1[None].to(f'cuda:{model.device_ids[0]}')
             image2 = image2[None].to(f'cuda:{model.device_ids[0]}')
             if sequence != sequence_prev:
@@ -272,17 +284,18 @@ def validate_sintel_sequence(model, warm_start=False, iters=6):
             padder = InputPadder(image1.shape)
             image1, image2 = padder.pad(image1, image2)
 
-            flow_low, flow_pr = model.module(image1, image2, iters=iters, flow_init=flow_prev, test_mode=True)
+            #flow_low, flow_pr = model.module(image1, image2, iters=iters, flow_init=flow_prev, test_mode=True)
+            flow_pr = model.module(image1, image2, iters=iters, test_mode=True)
             flow = padder.unpad(flow_pr[0]).cpu()
 
-            if warm_start:
-                flow_prev = forward_interpolate(flow_low[0])[None].cuda()
+            #if warm_start:
+            #    flow_prev = forward_interpolate(flow_low[0])[None].cuda()
 
             epe = torch.sum((flow - flow_gt)**2, dim=0).sqrt()
             epe_list.append(epe.view(-1).numpy())
 
             per_seq_epe_list.append(epe.view(-1).numpy().mean())
-            sequence_prev = sequence
+            #equence_prev = sequence
 
         all_seq_epe_list.append(per_seq_epe_list)
         with open(f'{dstype}_seq_epe.csv', 'w') as f:
@@ -341,7 +354,7 @@ def validate_kitti(model, iters=6):
     return {'kitti_epe': epe, 'kitti_f1': f1}
 
 
-if __name__ == '__main__':
+if __name__ == '__main__':    
     parser = argparse.ArgumentParser()
     parser.add_argument('--model', help="restore checkpoint")
     parser.add_argument('--dataset', help="dataset for evaluation")

@@ -6,6 +6,7 @@ import os
 import time
 import numpy as np
 import torch
+from tqdm import tqdm
 
 from sparsenet import SparseNet
 # from sparsenet import SparseNetEighth
@@ -16,12 +17,15 @@ from utils import frame_utils
 from utils.utils import InputPadder, forward_interpolate
 
 
+DATASET_ROOT = '/home/tpatten/Data/Opticalflow/Sintel'
+
+
 @torch.no_grad()
 def create_sintel_submission(model, warm_start=False, output_path='sintel_submission'):
     """ Create submission for the Sintel leaderboard """
     model.eval()
     for dstype in ['clean', 'final']:
-        test_dataset = datasets.MpiSintel(split='test', aug_params=None, dstype=dstype)
+        test_dataset = datasets.MpiSintel(split='test', aug_params=None, dstype=dstype, root=DATASET_ROOT)
 
         flow_prev, sequence_prev = None, None
         for test_id in range(len(test_dataset)):
@@ -98,10 +102,10 @@ def validate_sintel(model, iters=6):
     model.eval()
     results = {}
     for dstype in ['clean', 'final']:
-        val_dataset = datasets.MpiSintel(split='training', dstype=dstype)
+        val_dataset = datasets.MpiSintel(split='training', dstype=dstype, root=DATASET_ROOT)
         epe_list = []
 
-        for val_id in range(len(val_dataset)):
+        for val_id in tqdm(range(len(val_dataset))):
             image1, image2, flow_gt, _ = val_dataset[val_id]
             image1 = image1[None].cuda()
             image2 = image2[None].cuda()
