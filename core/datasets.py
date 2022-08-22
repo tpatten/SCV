@@ -10,6 +10,7 @@ import math
 import random
 from glob import glob
 import os.path as osp
+import json
 
 from utils import frame_utils
 from utils.augmentor import FlowAugmentor, SparseFlowAugmentor
@@ -193,6 +194,65 @@ class HD1K(FlowDataset):
                 self.image_list += [ [images[i], images[i+1]] ]
 
             seq_ix += 1
+
+
+class AWI(FlowDataset):
+    def __init__(self, aug_params=None, split='training', root='datasets/AWI'):
+        super(AWI, self).__init__(aug_params)
+
+        # Constants
+        TARGETS_FILE_ = 'targets_features.json'
+        CAMERAS_ = ['GX300643', 'GX301187']
+        ANNOTATION_DIR_ = 'json'
+        IMAGE_PAIR_DIR_ = 'before_skirt'
+
+        if split == 'test':
+            self.is_test = True
+        else:
+            raise NotImplementedError
+
+        # Load the targets
+        targets_file_name = os.path.join(root, TARGETS_FILE_)
+        with open(targets_file_name) as json_file:
+            fleece_dirs = json.load(json_file)
+
+        # Store the image annotation file names in a list
+        targets = []
+        fleece_dirs = fleece_dirs[split]
+
+        # Get all images within the named directories
+        # Data assumed to be organised as:
+        # subdir
+        # | - camera1
+        #     | - json
+        #         | - image1.json
+        #         | - ...
+        #         | - imageN.json
+        #         | - before_skirt
+        #             | - image1.png
+        #             | - ...
+        #             | - imageN.png
+        #         | - after_skirt
+        #             | - image1.png
+        #             | - ...
+        #             | - imageN.png
+        # | - ...
+        # | - cameraN
+        #     | ...
+        for subdir in fleece_dirs:
+            for c in CAMERAS_:
+                path_to_annotations = os.path.join(root, subdir, c, ANNOTATION_DIR_)
+                # Get all files in the directory
+                for i, f in enumerate(os.listdir(path_to_annotations)):
+                    anno_file = os.path.join(path_to_annotations, f)
+                    if os.path.isfile(anno_file) and f.endswith('.json'):
+                        with open(anno_file) as json_file:
+                            anno_data = json.load(json_file)
+                        image_1 = os.path.join(path_to_annotations, IMAGE_PAIR_DIR_, f.replace('.json', '.png'))
+                        image_2 = os.path.join(path_to_annotations, anno_data['correspondence'])
+
+                        self.image_list += [[image_1, image_2]]
+                        self.extra_info += [(subdir, c, i)]  # scene and frame_id
 
 
 def fetch_dataloader(args, TRAIN_DS='C+T+K+S+H'):

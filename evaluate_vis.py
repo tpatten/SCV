@@ -25,14 +25,15 @@ from PIL import Image, ImageDraw, ImageFont
 import csv
 
 
-DATASET_ROOT = '/home/tpatten/Data/Opticalflow/Sintel'
+DATASET_ROOT = {'sintel': '/home/tpatten/Data/Opticalflow/Sintel',
+                'awi': '/home/tpatten/Data/AWI'}
 
 @torch.no_grad()
 def create_sintel_submission(model, warm_start=False, output_path='sintel_submission'):
     """ Create submission for the Sintel leaderboard """
     model.eval()
     for dstype in ['clean', 'final']:
-        test_dataset = datasets.MpiSintel(split='test', aug_params=None, dstype=dstype, root=DATASET_ROOT)
+        test_dataset = datasets.MpiSintel(split='test', aug_params=None, dstype=dstype, root=DATASET_ROOT['sintel'])
 
         flow_prev, sequence_prev = None, None
         for test_id in range(len(test_dataset)):
@@ -64,7 +65,7 @@ def create_sintel_submission_vis(model, warm_start=False, output_path='sintel_su
     """ Create submission for the Sintel leaderboard """
     model.eval()
     for dstype in ['clean', 'final']:
-        test_dataset = datasets.MpiSintel(split='test', aug_params=None, dstype=dstype, root=DATASET_ROOT)
+        test_dataset = datasets.MpiSintel(split='test', aug_params=None, dstype=dstype, root=DATASET_ROOT['sintel'])
 
         flow_prev, sequence_prev = None, None
         for test_id in range(len(test_dataset)):
@@ -156,7 +157,7 @@ def validate_chairs(model, iters=6):
 def gen_sintel_image():
     """ Peform validation using the Sintel (train) split """
     for dstype in ['clean', 'final']:
-        val_dataset = datasets.MpiSintel(split='training', dstype=dstype, root=DATASET_ROOT)
+        val_dataset = datasets.MpiSintel(split='training', dstype=dstype, root=DATASET_ROOT['sintel'])
         for val_id in range(len(val_dataset)):
             image1, image2, flow_gt, _, (sequence, frame) = val_dataset[val_id]
             image1 = image1.byte().permute(1,2,0)
@@ -167,7 +168,7 @@ def gen_sintel_image():
 def gen_sintel_gt():
     """ Peform validation using the Sintel (train) split """
     for dstype in ['clean', 'final']:
-        val_dataset = datasets.MpiSintel(split='training', dstype=dstype, root=DATASET_ROOT)
+        val_dataset = datasets.MpiSintel(split='training', dstype=dstype, root=DATASET_ROOT['sintel'])
         for val_id in range(len(val_dataset)):
             image1, image2, flow_gt, _, (sequence, frame) = val_dataset[val_id]
 
@@ -178,14 +179,14 @@ def gen_sintel_gt():
 
 
 @torch.no_grad()
-def validate_sintel(model, warm_start=False, iters=6):
-    """ Peform validation using the Sintel (train) split """
+def validate_sintel(model, warm_start=False, iters=6, save=False):
+    """ Perform validation using the Sintel (train) split """
     model.eval()
     results = {}
     #font = ImageFont.truetype("FUTURAL.ttf", 40)
     font = ImageFont.load_default()
     for dstype in ['clean', 'final']:
-        val_dataset = datasets.MpiSintel(split='training', dstype=dstype, root=DATASET_ROOT)
+        val_dataset = datasets.MpiSintel(split='training', dstype=dstype, root=DATASET_ROOT['sintel'])
         epe_list = []
         flow_prev, sequence_prev = None, None
         for val_id in tqdm(range(len(val_dataset))):
@@ -214,34 +215,35 @@ def validate_sintel(model, warm_start=False, iters=6):
             #sequence_prev = sequence
 
             # Visualizations
-            output_flow = flow.permute(1, 2, 0).numpy()
-            flow_img = flow_viz.flow_to_image(output_flow)
-            image = Image.fromarray(flow_img)
-            draw = ImageDraw.Draw(image)
-            draw.text((10, 10), f'EPE: {epe.view(-1).mean().item():.2f}', (0, 0, 0), font=font)
-            if not os.path.exists(f'vis/RAFT/{dstype}/'):
-                os.makedirs(f'vis/RAFT/{dstype}/flow')
-                os.makedirs(f'vis/RAFT/{dstype}/error')
+            if save:
+                output_flow = flow.permute(1, 2, 0).numpy()
+                flow_img = flow_viz.flow_to_image(output_flow)
+                image = Image.fromarray(flow_img)
+                draw = ImageDraw.Draw(image)
+                draw.text((10, 10), f'EPE: {epe.view(-1).mean().item():.2f}', (0, 0, 0), font=font)
+                if not os.path.exists(f'vis/RAFT/{dstype}/'):
+                    os.makedirs(f'vis/RAFT/{dstype}/flow')
+                    os.makedirs(f'vis/RAFT/{dstype}/error')
 
-            if not os.path.exists(f'vis/ours/{dstype}/'):
-                os.makedirs(f'vis/ours/{dstype}/flow')
-                os.makedirs(f'vis/ours/{dstype}/error')
+                if not os.path.exists(f'vis/ours/{dstype}/'):
+                    os.makedirs(f'vis/ours/{dstype}/flow')
+                    os.makedirs(f'vis/ours/{dstype}/error')
 
-            if not os.path.exists(f'vis/gt/{dstype}/'):
-                os.makedirs(f'vis/gt/{dstype}/flow')
-                os.makedirs(f'vis/gt/{dstype}/image')
-            '''
-            image.save(f'vis/RAFT/{dstype}/flow/{val_id}_{epe.view(-1).mean().item():.3f}.png')
-            imageio.imwrite(f'vis/RAFT/{dstype}/error/{val_id}_{epe.view(-1).mean().item():.3f}.png', epe.numpy())
+                if not os.path.exists(f'vis/gt/{dstype}/'):
+                    os.makedirs(f'vis/gt/{dstype}/flow')
+                    os.makedirs(f'vis/gt/{dstype}/image')
 
-            image.save(f'vis/ours/{dstype}/flow/{val_id}_{epe.view(-1).mean().item():.3f}.png')
-            imageio.imwrite(f'vis/ours/{dstype}/error/{val_id}_{epe.view(-1).mean().item():.3f}.png', epe.numpy())
+                image.save(f'vis/RAFT/{dstype}/flow/{val_id}_{epe.view(-1).mean().item():.3f}.png')
+                imageio.imwrite(f'vis/RAFT/{dstype}/error/{val_id}_{epe.view(-1).mean().item():.3f}.png', epe.numpy())
 
-            flow_gt_vis = flow_gt.permute(1, 2, 0).numpy()
-            flow_gt_vis = flow_viz.flow_to_image(flow_gt_vis)
-            imageio.imwrite(f'vis/gt/{dstype}/flow/{val_id}.png', flow_gt_vis)
-            imageio.imwrite(f'vis/gt/{dstype}/image/{val_id}.png', image1[0].cpu().permute(1,2,0).numpy())
-            '''
+                image.save(f'vis/ours/{dstype}/flow/{val_id}_{epe.view(-1).mean().item():.3f}.png')
+                imageio.imwrite(f'vis/ours/{dstype}/error/{val_id}_{epe.view(-1).mean().item():.3f}.png', epe.numpy())
+
+                flow_gt_vis = flow_gt.permute(1, 2, 0).numpy()
+                flow_gt_vis = flow_viz.flow_to_image(flow_gt_vis)
+                imageio.imwrite(f'vis/gt/{dstype}/flow/{val_id}.png', flow_gt_vis)
+                imageio.imwrite(f'vis/gt/{dstype}/image/{val_id}.png', image1[0].cpu().permute(1,2,0).numpy())
+
 
         epe_all = np.concatenate(epe_list)
 
@@ -258,7 +260,7 @@ def validate_sintel(model, warm_start=False, iters=6):
 
 @torch.no_grad()
 def validate_sintel_sequence(model, warm_start=False, iters=6):
-    """ Peform validation using the Sintel (train) split """
+    """ Perform validation using the Sintel (train) split """
     model.eval()
     results = {}
     #font = ImageFont.truetype("FUTURAL.ttf", 40)
@@ -354,6 +356,38 @@ def validate_kitti(model, iters=6):
     return {'kitti_epe': epe, 'kitti_f1': f1}
 
 
+@torch.no_grad()
+def validate_awi(model, iters=6, save=False):
+    """ Perform validation using the AWI dataset """
+    model.eval()
+    val_dataset = datasets.AWI(split='test', root=DATASET_ROOT['awi'])
+    for val_id in tqdm(range(len(val_dataset))):
+        image1, image2, _ = val_dataset[val_id]
+        #print(image1.shape, flow_gt.shape)  # torch.Size([3, 436, 1024]) torch.Size([2, 436, 1024])
+        image1 = image1[None].to(f'cuda:{model.device_ids[0]}')
+        image2 = image2[None].to(f'cuda:{model.device_ids[0]}')
+
+        padder = InputPadder(image1.shape)
+        image1, image2 = padder.pad(image1, image2)
+
+        flow_pr = model.module(image1, image2, iters=iters, test_mode=True)
+        # print(image1.shape, flow_pr.shape)  # torch.Size([1, 3, 440, 1024]) torch.Size([1, 2, 440, 1024])
+        flow = padder.unpad(flow_pr[0]).cpu()
+
+        #epe = torch.sum((flow - flow_gt)**2, dim=0).sqrt()
+
+        # Visualizations
+        if save:
+            output_flow = flow.permute(1, 2, 0).numpy()
+            flow_img = flow_viz.flow_to_image(output_flow)
+            flow_img = Image.fromarray(flow_img)
+
+            if not os.path.exists(f'vis/ours/awi/'):
+                os.makedirs(f'vis/ours/awi/')
+
+            imageio.imwrite(f'vis/ours/awi/{val_id}.png', flow_img)
+
+
 if __name__ == '__main__':    
     parser = argparse.ArgumentParser()
     parser.add_argument('--model', help="restore checkpoint")
@@ -364,7 +398,8 @@ if __name__ == '__main__':
                         help='maximum search range for hypotheses in quarter resolution')
     parser.add_argument('--mixed_precision', default=True, help='use mixed precision')
     parser.add_argument('--small', action='store_true', help='use small model')
-    parser.add_argument('--alternate_corr', action='store_true', help='use efficent correlation implementation')
+    parser.add_argument('--alternate_corr', action='store_true', help='use efficient correlation implementation')
+    parser.add_argument('--save', action='store_true', help='save predictions to file')
     args = parser.parse_args()
 
     model = torch.nn.DataParallel(SparseNet(args))
@@ -385,7 +420,7 @@ if __name__ == '__main__':
             validate_chairs(model, iters=24)
 
         elif args.dataset == 'sintel':
-            validate_sintel(model, warm_start=False, iters=32)
+            validate_sintel(model, warm_start=False, iters=32, save=args.save)
             # validate_sintel_sequence(model, warm_start=False, iters=32)
 
         elif args.dataset == 'kitti':
