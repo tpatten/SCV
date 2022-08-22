@@ -252,7 +252,7 @@ class AWI(FlowDataset):
                         image_2 = os.path.join(path_to_annotations, anno_data['correspondence'])
 
                         self.image_list += [[image_1, image_2]]
-                        self.extra_info += [(subdir, c, i)]  # scene and frame_id
+                        self.extra_info += [(subdir, c, f.replace('.json', ''))]  # scene, camera and frame_id
 
 
 def fetch_dataloader(args, TRAIN_DS='C+T+K+S+H'):

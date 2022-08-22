@@ -26,7 +26,7 @@ import csv
 
 
 DATASET_ROOT = {'sintel': '/home/tpatten/Data/Opticalflow/Sintel',
-                'awi': '/home/tpatten/Data/AWI'}
+                'awi': '/home/tpatten/Data/AWI/AWI_Dataset'}
 
 @torch.no_grad()
 def create_sintel_submission(model, warm_start=False, output_path='sintel_submission'):
@@ -361,8 +361,9 @@ def validate_awi(model, iters=6, save=False):
     """ Perform validation using the AWI dataset """
     model.eval()
     val_dataset = datasets.AWI(split='test', root=DATASET_ROOT['awi'])
+    print('Evaluating on {} image pairs'.format(len(val_dataset)))
     for val_id in tqdm(range(len(val_dataset))):
-        image1, image2, _ = val_dataset[val_id]
+        image1, image2, frame_info = val_dataset[val_id]
         #print(image1.shape, flow_gt.shape)  # torch.Size([3, 436, 1024]) torch.Size([2, 436, 1024])
         image1 = image1[None].to(f'cuda:{model.device_ids[0]}')
         image2 = image2[None].to(f'cuda:{model.device_ids[0]}')
@@ -382,10 +383,15 @@ def validate_awi(model, iters=6, save=False):
             flow_img = flow_viz.flow_to_image(output_flow)
             flow_img = Image.fromarray(flow_img)
 
-            if not os.path.exists(f'vis/ours/awi/'):
-                os.makedirs(f'vis/ours/awi/')
+            fleece_id, camera, ts = frame_info
 
-            imageio.imwrite(f'vis/ours/awi/{val_id}.png', flow_img)
+            if not os.path.exists(f'vis/awi/{fleece_id}/{camera}/vis/'):
+                os.makedirs(f'vis/awi/{fleece_id}/{camera}/vis/')
+            if not os.path.exists(f'vis/awi/{fleece_id}/{camera}/flow/'):
+                os.makedirs(f'vis/awi/{fleece_id}/{camera}/flow/')
+
+            imageio.imwrite(f'vis/awi/{fleece_id}/{camera}/vis/{ts}.png', flow_img)
+            frame_utils.writeFlow(f'vis/awi/{fleece_id}/{camera}/flow/{ts}.flo', output_flow)
 
 
 if __name__ == '__main__':    
@@ -425,3 +431,6 @@ if __name__ == '__main__':
 
         elif args.dataset == 'kitti':
             validate_kitti(model, iters=24)
+
+        elif args.dataset == 'awi':
+            validate_awi(model, iters=32, save=args.save)
