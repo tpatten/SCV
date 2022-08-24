@@ -217,7 +217,6 @@ class AWI(FlowDataset):
             fleece_dirs = json.load(json_file)
 
         # Store the image annotation file names in a list
-        targets = []
         fleece_dirs = fleece_dirs[split]
 
         # Get all images within the named directories
@@ -251,7 +250,8 @@ class AWI(FlowDataset):
                         image_1 = os.path.join(path_to_annotations, IMAGE_PAIR_DIR_, f.replace('.json', '.png'))
                         image_2 = os.path.join(path_to_annotations, anno_data['correspondence'])
 
-                        self.image_list += [[image_1, image_2]]
+                        # self.image_list += [[image_1, image_2]]
+                        self.image_list += [[image_2, image_1]]  # Reversing this because we want flow from after to before skirted
                         self.extra_info += [(subdir, c, f.replace('.json', ''))]  # scene, camera and frame_id
 
 
@@ -270,9 +270,11 @@ def fetch_dataloader(args, TRAIN_DS='C+T+K+S+H'):
 
     elif args.stage == 'sintel':
         aug_params = {'crop_size': args.image_size, 'min_scale': -0.2, 'max_scale': 0.6, 'do_flip': True}
-        things = FlyingThings3D(aug_params, dstype='frames_cleanpass')
-        sintel_clean = MpiSintel(aug_params, split='training', dstype='clean')
-        sintel_final = MpiSintel(aug_params, split='training', dstype='final')        
+        #things = FlyingThings3D(aug_params, dstype='frames_cleanpass')
+        sintel_clean = MpiSintel(aug_params, split='training', dstype='clean', root='/home/tpatten/Data/Opticalflow/Sintel')
+        sintel_final = MpiSintel(aug_params, split='training', dstype='final', root='/home/tpatten/Data/Opticalflow/Sintel')
+
+        TRAIN_DS == 'C+T+K/S'
 
         if TRAIN_DS == 'C+T+K+S+H':
             kitti = KITTI({'crop_size': args.image_size, 'min_scale': -0.3, 'max_scale': 0.5, 'do_flip': True})
@@ -280,7 +282,7 @@ def fetch_dataloader(args, TRAIN_DS='C+T+K+S+H'):
             train_dataset = 100*sintel_clean + 100*sintel_final + 200*kitti + 5*hd1k + things
 
         elif TRAIN_DS == 'C+T+K/S':
-            train_dataset = 100*sintel_clean + 100*sintel_final + things
+            train_dataset = 100*sintel_clean + 100*sintel_final# + things
 
     elif args.stage == 'kitti':
         aug_params = {'crop_size': args.image_size, 'min_scale': -0.2, 'max_scale': 0.4, 'do_flip': False}
