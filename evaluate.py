@@ -17,7 +17,8 @@ from utils import frame_utils
 from utils.utils import InputPadder, forward_interpolate
 
 
-DATASET_ROOT = '/home/tpatten/Data/Opticalflow/Sintel'
+DATASET_ROOT = {'sintel': '/home/tpatten/Data/Opticalflow/Sintel',
+                'awi': '/home/tpatten/Data/AWI/AWI_Dataset'}
 
 
 @torch.no_grad()
@@ -25,7 +26,7 @@ def create_sintel_submission(model, warm_start=False, output_path='sintel_submis
     """ Create submission for the Sintel leaderboard """
     model.eval()
     for dstype in ['clean', 'final']:
-        test_dataset = datasets.MpiSintel(split='test', aug_params=None, dstype=dstype, root=DATASET_ROOT)
+        test_dataset = datasets.MpiSintel(split='test', aug_params=None, dstype=dstype, root=DATASET_ROOT['sintel'])
 
         flow_prev, sequence_prev = None, None
         for test_id in range(len(test_dataset)):
@@ -102,7 +103,7 @@ def validate_sintel(model, iters=6):
     model.eval()
     results = {}
     for dstype in ['clean', 'final']:
-        val_dataset = datasets.MpiSintel(split='training', dstype=dstype, root=DATASET_ROOT)
+        val_dataset = datasets.MpiSintel(split='training', dstype=dstype, root=DATASET_ROOT['sintel'])
         epe_list = []
 
         for val_id in tqdm(range(len(val_dataset))):
@@ -169,6 +170,63 @@ def validate_kitti(model, iters=6):
 
     print("Validation KITTI: %f, %f" % (epe, f1))
     return {'kitti_epe': epe, 'kitti_f1': f1}
+
+
+@torch.no_grad()
+def validate_awi(model, iters=6, save=False):
+    """ Perform validation using the AWI dataset """
+    model.eval()
+    val_dataset = datasets.AWI2(split='test', root=DATASET_ROOT['awi'])
+    print('Evaluating on {} image pairs'.format(len(val_dataset)))
+
+    results = {}
+    epe_list = []
+    for val_id in tqdm(range(len(val_dataset))):
+        image1, image2, flow_gt, valid_gt = val_dataset[val_id]
+        #print(image1.shape, flow_gt.shape)  # torch.Size([3, 436, 1024]) torch.Size([2, 436, 1024])
+        image1 = image1[None].to(f'cuda:{model.device_ids[0]}')
+        image2 = image2[None].to(f'cuda:{model.device_ids[0]}')
+
+        padder = InputPadder(image1.shape)
+        image1, image2 = padder.pad(image1, image2)
+
+        flow_pr = model.module(image1, image2, iters=iters, test_mode=True)
+        # print(image1.shape, flow_pr.shape)  # torch.Size([1, 3, 440, 1024]) torch.Size([1, 2, 440, 1024])
+        flow = padder.unpad(flow_pr[0]).cpu()
+
+        '''
+        # Visualizations
+        if save:
+            output_flow = flow.permute(1, 2, 0).numpy()
+            flow_img = flow_viz.flow_to_image(output_flow)
+            flow_img = Image.fromarray(flow_img)
+
+            fleece_id, camera, ts = frame_info
+
+            if not os.path.exists(f'vis/awi/{fleece_id}/{camera}/vis/'):
+                os.makedirs(f'vis/awi/{fleece_id}/{camera}/vis/')
+            if not os.path.exists(f'vis/awi/{fleece_id}/{camera}/flow/'):
+                os.makedirs(f'vis/awi/{fleece_id}/{camera}/flow/')
+
+            imageio.imwrite(f'vis/awi/{fleece_id}/{camera}/vis/{ts}.png', flow_img)
+            frame_utils.writeFlow(f'vis/awi/{fleece_id}/{camera}/flow/{ts}.flo', output_flow)
+        '''
+
+        epe = torch.sum((flow - flow_gt) ** 2, dim=0).sqrt()
+        epe = epe.view(-1)
+        val = valid_gt.view(-1) >= 0.5
+        epe_list.append(epe[val].mean().item())
+
+    epe_all = np.concatenate(epe_list)
+
+    epe = np.mean(epe_all)
+    px1 = np.mean(epe_all < 1)
+    px3 = np.mean(epe_all < 3)
+    px5 = np.mean(epe_all < 5)
+
+    print("Validation EPE: %f, 1px: %f, 3px: %f, 5px: %f" % (epe, px1, px3, px5))
+    results['awi_epe'] = np.mean(epe)
+    return results
 
 
 if __name__ == '__main__':

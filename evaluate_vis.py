@@ -383,7 +383,10 @@ def validate_awi(model, iters=6, save=False):
             flow_img = flow_viz.flow_to_image(output_flow)
             flow_img = Image.fromarray(flow_img)
 
-            fleece_id, camera, ts = frame_info
+            #fleece_id, camera, ts = frame_info
+            fleece_id = frame_info['scene']
+            camera = frame_info['camera']
+            ts = frame_info['frame']
 
             if not os.path.exists(f'vis/awi/{fleece_id}/{camera}/vis/'):
                 os.makedirs(f'vis/awi/{fleece_id}/{camera}/vis/')

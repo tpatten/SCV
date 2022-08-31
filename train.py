@@ -197,6 +197,8 @@ def validate(model, args, logger):
             results.update(evaluate.validate_sintel(model.module, args.iters))
         elif val_dataset == 'kitti':
             results.update(evaluate.validate_kitti(model.module, args.iters))
+        elif val_dataset == 'awi':
+            results.update(evaluate.validate_awi(model.module, args.iters))
 
     # Record results in logger
     for key in results.keys():

@@ -17,7 +17,7 @@ from utils.augmentor import FlowAugmentor, SparseFlowAugmentor
 
 
 class FlowDataset(data.Dataset):
-    def __init__(self, aug_params=None, sparse=False):
+    def __init__(self, aug_params=None, sparse=False, halve_image=False):
         self.augmentor = None
         self.sparse = sparse
         if aug_params is not None:
@@ -31,6 +31,7 @@ class FlowDataset(data.Dataset):
         self.flow_list = []
         self.image_list = []
         self.extra_info = []
+        self.halve_image = halve_image
 
     def __getitem__(self, index):
 
@@ -57,6 +58,8 @@ class FlowDataset(data.Dataset):
             flow, valid = frame_utils.readFlowKITTI(self.flow_list[index])
         else:
             flow = frame_utils.read_gen(self.flow_list[index])
+            if type(flow) is tuple:
+                flow, valid = flow
 
         img1 = frame_utils.read_gen(self.image_list[index][0])
         img2 = frame_utils.read_gen(self.image_list[index][1])
@@ -64,6 +67,17 @@ class FlowDataset(data.Dataset):
         flow = np.array(flow).astype(np.float32)
         img1 = np.array(img1).astype(np.uint8)
         img2 = np.array(img2).astype(np.uint8)
+
+        if self.halve_image:
+            half_width = int(flow.shape[1] / 2)
+            if self.extra_info[index]['camera'] == 'GX301187':
+                flow = flow[:, :half_width, :]
+                img1 = img1[:, :half_width, :]
+                img2 = img2[:, :half_width, :]
+            else:
+                flow = flow[:, half_width:, :]
+                img1 = img1[:, half_width:, :]
+                img2 = img2[:, half_width:, :]
 
         # grayscale images
         if len(img1.shape) == 2:
@@ -198,7 +212,7 @@ class HD1K(FlowDataset):
 
 class AWI(FlowDataset):
     def __init__(self, aug_params=None, split='training', root='datasets/AWI'):
-        super(AWI, self).__init__(aug_params)
+        super(AWI, self).__init__(aug_params, sparse=False)
 
         # Constants
         TARGETS_FILE_ = 'targets_features.json'
@@ -255,6 +269,54 @@ class AWI(FlowDataset):
                         self.extra_info += [(subdir, c, f.replace('.json', ''))]  # scene, camera and frame_id
 
 
+class AWI2(FlowDataset):
+    def __init__(self, aug_params=None, halve_image=False, split='training', root='datasets/AWI'):
+        super(AWI2, self).__init__(aug_params, sparse=False, halve_image=halve_image)
+
+        # Constants
+        CAMERAS_ = ['GX300643', 'GX301187']
+        ANNOTATION_DIR_ = 'json'
+        IMAGE_PAIR_DIR_ = 'before_skirt'
+        VALIDATION_SPLIT_ = ['fleece55_2021-12-16-10-01-43', 'fleece5_2021-12-15-10-59-41',
+                             'fleece65_2021-12-16-10-51-22']
+        TEST_SPLIT_ = ['fleece15_2021-12-15-11-55-44', 'fleece21_2021-12-15-13-38-58', 'fleece25_2021-12-15-14-07-57',
+                       'fleece43_2021-12-16-08-56-20', 'fleece50_2021-12-16-09-31-16', 'fleece56_2021-12-16-10-06-10',
+                       'fleece59_2021-12-16-10-20-39', 'fleece70_2021-12-16-11-20-18']
+
+        if split == 'test':
+            self.is_test = True
+
+        flow_dir = root.replace('AWI_Dataset', 'AWI_Dataset_Flow_Annotation')
+
+        if split == 'validation':
+            fleece_dirs = VALIDATION_SPLIT_
+        elif split == 'test':
+            fleece_dirs = TEST_SPLIT_
+        else:
+            reject_list = VALIDATION_SPLIT_ + TEST_SPLIT_
+            fleece_dirs = sorted([f for f in os.listdir(flow_dir)
+                                  if f.startswith('fleece') and f not in reject_list])
+
+        for subdir in fleece_dirs:
+            for c in CAMERAS_:
+                path_to_annotations = os.path.join(root, subdir, c, ANNOTATION_DIR_)
+                path_to_flows = os.path.join(flow_dir, subdir, c)
+                # Get all files in the directory
+                for i, f in enumerate(os.listdir(path_to_flows)):
+                    flow_file = os.path.join(path_to_flows, f)
+                    # flow_gt = sio.loadmat(flow_file)['matrix']
+                    anno_file = os.path.join(path_to_annotations, f.replace('.mat', '.json'))
+                    if os.path.isfile(anno_file):
+                        with open(anno_file) as json_file:
+                            anno_data = json.load(json_file)
+                        image_1 = os.path.join(path_to_annotations, IMAGE_PAIR_DIR_, f.replace('.json', '.png'))
+                        image_2 = os.path.join(path_to_annotations, anno_data['correspondence'])
+
+                        self.image_list += [[image_2, image_1]]  # Reversing this because we want flow from after to before skirted
+                        self.flow_list += [flow_file]
+                        self.extra_info += [{'scene': subdir, 'camera': c, 'frame': f.replace('.json', '')}]  # scene, camera and frame_id
+
+
 def fetch_dataloader(args, TRAIN_DS='C+T+K+S+H'):
     """ Create the data loader for the corresponding training set """
 
@@ -287,6 +349,14 @@ def fetch_dataloader(args, TRAIN_DS='C+T+K+S+H'):
     elif args.stage == 'kitti':
         aug_params = {'crop_size': args.image_size, 'min_scale': -0.2, 'max_scale': 0.4, 'do_flip': False}
         train_dataset = KITTI(aug_params, split='training')
+
+    elif args.stage == 'awi':
+        input_image_width = 2464
+        aug_params = None  # {'crop_size': args.image_size, 'min_scale': -0.2, 'max_scale': 0.4, 'do_flip': False}
+        if args.image_size[1] != input_image_width:
+            train_dataset = AWI2(aug_params, split='training', halve_image=True)
+        else:
+            train_dataset = AWI2(aug_params, split='training', halve_image=False)
 
     train_loader = data.DataLoader(train_dataset, batch_size=args.batch_size,
                                    pin_memory=True, shuffle=True, num_workers=8, drop_last=True)
