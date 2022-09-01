@@ -22,6 +22,8 @@ import evaluate
 
 from torch.cuda.amp import GradScaler
 
+import wandb
+
 # exclude extremly large displacements
 MAX_FLOW = 400
 
@@ -139,6 +141,9 @@ def main(args):
     scaler = GradScaler(enabled=args.mixed_precision)
     logger = Logger(model, scheduler, args)
 
+    if args.wandb:
+        initialise_wandb()
+
     while logger.total_steps <= args.num_steps:
         train(model, train_loader, optimizer, scheduler, logger, scaler, args)
         if logger.total_steps >= args.num_steps:
@@ -178,6 +183,7 @@ def train(model, train_loader, optimizer, scheduler, logger, scaler, args):
             validate(model, args, logger)
             plot_train(logger, args)
             plot_val(logger, args)
+            log_wandb(logger)
             PATH = args.output + f'/{logger.total_steps+1}_{args.name}.pth'
             torch.save(model.state_dict(), PATH)
 
@@ -233,6 +239,17 @@ def plot_train(logger, args):
     plt.close()
 
 
+def initialise_wandb():
+    wandb.init(project='scv_optical_flow', entity='tpatten')
+
+
+def log_wandb(logger):
+    log_set = {'loss': logger.train_epe_list[-1]}
+    for key in logger.val_results_dict.keys():
+        log_set[key] = logger.val_results_dict[key][-1]
+    wandb.log(log_set)
+
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--name', default='bla', help="name your experiment")
@@ -266,6 +283,8 @@ if __name__ == '__main__':
                         help='printing frequency')
 
     parser.add_argument('--mixed_precision', default=True, help='use mixed precision')
+
+    parser.add_argument('--wandb', action='store_true', help='log to wandb')
 
     args = parser.parse_args()
 
