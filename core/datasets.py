@@ -291,7 +291,7 @@ class AWI(FlowDataset):
 
                         # self.image_list += [[image_1, image_2]]
                         self.image_list += [[image_2, image_1]]  # Reversing this because we want flow from after to before skirted
-                        self.extra_info += [(subdir, c, f.replace('.json', ''))]  # scene, camera and frame_id
+                        self.extra_info += [{'scene': subdir, 'camera': c, 'frame': f.replace('.json', '')}]  # scene, camera and frame_id
 
 
 class AWI2(FlowDataset):
