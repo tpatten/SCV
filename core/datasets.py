@@ -14,6 +14,13 @@ import json
 
 from utils import frame_utils
 from utils.augmentor import FlowAugmentor, SparseFlowAugmentor
+from utils import flow_viz
+import imageio
+from PIL import Image
+
+
+DATASET_ROOT = {'sintel': '/home/tpatten/Data/Opticalflow/Sintel',
+                'awi': '/home/tpatten/Data/AWI/AWI_Dataset'}
 
 
 class FlowDataset(data.Dataset):
@@ -72,12 +79,30 @@ class FlowDataset(data.Dataset):
             half_width = int(flow.shape[1] / 2)
             if self.extra_info[index]['camera'] == 'GX301187':
                 flow = flow[:, :half_width, :]
+                valid = valid[:, :half_width]
                 img1 = img1[:, :half_width, :]
                 img2 = img2[:, :half_width, :]
             else:
                 flow = flow[:, half_width:, :]
+                valid = valid[:, half_width:]
                 img1 = img1[:, half_width:, :]
                 img2 = img2[:, half_width:, :]
+
+            '''
+            flow_img = flow.copy()
+            flow_img[~valid] = [0, 0]
+            flow_img = flow_viz.flow_to_image(flow_img)
+            flow_img = Image.fromarray(flow_img)
+
+            fleece_id = self.extra_info[index]['scene']
+            camera = self.extra_info[index]['camera']
+            ts = os.path.splitext(self.extra_info[index]['frame'])[0]
+
+            imageio.imwrite(f'/home/tpatten/Data/temp/{fleece_id}_{camera}_{ts}_aft.png', img1)
+            imageio.imwrite(f'/home/tpatten/Data/temp/{fleece_id}_{camera}_{ts}_bef.png', img2)
+            imageio.imwrite(f'/home/tpatten/Data/temp/{fleece_id}_{camera}_{ts}_aflo.png', flow_img)
+            '''
+            
 
         # grayscale images
         if len(img1.shape) == 2:
@@ -301,20 +326,23 @@ class AWI2(FlowDataset):
             for c in CAMERAS_:
                 path_to_annotations = os.path.join(root, subdir, c, ANNOTATION_DIR_)
                 path_to_flows = os.path.join(flow_dir, subdir, c)
-                # Get all files in the directory
-                for i, f in enumerate(os.listdir(path_to_flows)):
-                    flow_file = os.path.join(path_to_flows, f)
-                    # flow_gt = sio.loadmat(flow_file)['matrix']
-                    anno_file = os.path.join(path_to_annotations, f.replace('.mat', '.json'))
-                    if os.path.isfile(anno_file):
-                        with open(anno_file) as json_file:
-                            anno_data = json.load(json_file)
-                        image_1 = os.path.join(path_to_annotations, IMAGE_PAIR_DIR_, f.replace('.json', '.png'))
-                        image_2 = os.path.join(path_to_annotations, anno_data['correspondence'])
+                if os.path.exists(path_to_flows):
+                    # Get all files in the directory
+                    for i, f in enumerate(os.listdir(path_to_flows)):
+                        flow_file = os.path.join(path_to_flows, f)
+                        # flow_gt = sio.loadmat(flow_file)['matrix']
+                        anno_file = os.path.join(path_to_annotations,
+                            f.replace(os.path.splitext(f)[-1], '.json'))
+                        if os.path.isfile(anno_file):
+                            with open(anno_file) as json_file:
+                                anno_data = json.load(json_file)
+                            image_1 = os.path.join(path_to_annotations, IMAGE_PAIR_DIR_,
+                                f.replace(os.path.splitext(f)[-1], '.png'))
+                            image_2 = os.path.join(path_to_annotations, anno_data['correspondence'])
 
-                        self.image_list += [[image_2, image_1]]  # Reversing this because we want flow from after to before skirted
-                        self.flow_list += [flow_file]
-                        self.extra_info += [{'scene': subdir, 'camera': c, 'frame': f.replace('.json', '')}]  # scene, camera and frame_id
+                            self.image_list += [[image_2, image_1]]  # Reversing this because we want flow from after to before skirted
+                            self.flow_list += [flow_file]
+                            self.extra_info += [{'scene': subdir, 'camera': c, 'frame': f.replace('.json', '')}]  # scene, camera and frame_id
 
 
 def fetch_dataloader(args, TRAIN_DS='C+T+K+S+H'):
@@ -332,11 +360,9 @@ def fetch_dataloader(args, TRAIN_DS='C+T+K+S+H'):
 
     elif args.stage == 'sintel':
         aug_params = {'crop_size': args.image_size, 'min_scale': -0.2, 'max_scale': 0.6, 'do_flip': True}
-        #things = FlyingThings3D(aug_params, dstype='frames_cleanpass')
+        things = FlyingThings3D(aug_params, dstype='frames_cleanpass')
         sintel_clean = MpiSintel(aug_params, split='training', dstype='clean', root='/home/tpatten/Data/Opticalflow/Sintel')
         sintel_final = MpiSintel(aug_params, split='training', dstype='final', root='/home/tpatten/Data/Opticalflow/Sintel')
-
-        TRAIN_DS == 'C+T+K/S'
 
         if TRAIN_DS == 'C+T+K+S+H':
             kitti = KITTI({'crop_size': args.image_size, 'min_scale': -0.3, 'max_scale': 0.5, 'do_flip': True})
@@ -344,7 +370,7 @@ def fetch_dataloader(args, TRAIN_DS='C+T+K+S+H'):
             train_dataset = 100*sintel_clean + 100*sintel_final + 200*kitti + 5*hd1k + things
 
         elif TRAIN_DS == 'C+T+K/S':
-            train_dataset = 100*sintel_clean + 100*sintel_final# + things
+            train_dataset = 100*sintel_clean + 100*sintel_final + things
 
     elif args.stage == 'kitti':
         aug_params = {'crop_size': args.image_size, 'min_scale': -0.2, 'max_scale': 0.4, 'do_flip': False}
@@ -354,9 +380,9 @@ def fetch_dataloader(args, TRAIN_DS='C+T+K+S+H'):
         input_image_width = 2464
         aug_params = None  # {'crop_size': args.image_size, 'min_scale': -0.2, 'max_scale': 0.4, 'do_flip': False}
         if args.image_size[1] != input_image_width:
-            train_dataset = AWI2(aug_params, split='training', halve_image=True)
+            train_dataset = AWI2(aug_params, split='training', root=DATASET_ROOT['awi'], halve_image=True)
         else:
-            train_dataset = AWI2(aug_params, split='training', halve_image=False)
+            train_dataset = AWI2(aug_params, split='training', root=DATASET_ROOT['awi'], halve_image=False)
 
     train_loader = data.DataLoader(train_dataset, batch_size=args.batch_size,
                                    pin_memory=True, shuffle=True, num_workers=8, drop_last=True)
