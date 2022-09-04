@@ -176,7 +176,7 @@ def validate_kitti(model, iters=6):
 def validate_awi(model, iters=6, save=False):
     """ Perform validation using the AWI dataset """
     model.eval()
-    val_dataset = datasets.AWI2(split='test', root=DATASET_ROOT['awi'])
+    val_dataset = datasets.AWI2(split='validation', root=DATASET_ROOT['awi'])
     print('Evaluating on {} image pairs'.format(len(val_dataset)))
 
     results = {}
@@ -214,10 +214,10 @@ def validate_awi(model, iters=6, save=False):
 
         epe = torch.sum((flow - flow_gt) ** 2, dim=0).sqrt()
         epe = epe.view(-1)
-        val = valid_gt.view(-1) >= 0.5
+        val = valid_gt.reshape(-1) >= 0.5
         epe_list.append(epe[val].mean().item())
 
-    epe_all = np.concatenate(epe_list)
+    epe_all = np.array(epe_list)
 
     epe = np.mean(epe_all)
     px1 = np.mean(epe_all < 1)

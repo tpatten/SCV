@@ -183,8 +183,10 @@ def train(model, train_loader, optimizer, scheduler, logger, scaler, args):
             validate(model, args, logger)
             plot_train(logger, args)
             plot_val(logger, args)
-            log_wandb(logger)
-            PATH = args.output + f'/{logger.total_steps+1}_{args.name}.pth'
+            if args.wandb:
+                log_wandb(logger)
+            # PATH = args.output + f'/{logger.total_steps+1}_{args.name}.pth'
+            PATH = args.output + f'/{args.name}.pth'
             torch.save(model.state_dict(), PATH)
 
         if logger.total_steps >= args.num_steps:
@@ -204,7 +206,7 @@ def validate(model, args, logger):
         elif val_dataset == 'kitti':
             results.update(evaluate.validate_kitti(model.module, args.iters))
         elif val_dataset == 'awi':
-            results.update(evaluate.validate_awi(model.module, args.iters))
+            results.update(evaluate.validate_awi(model, args.iters))
 
     # Record results in logger
     for key in results.keys():
