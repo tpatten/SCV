@@ -206,7 +206,11 @@ def validate(model, args, logger):
         elif val_dataset == 'kitti':
             results.update(evaluate.validate_kitti(model.module, args.iters))
         elif val_dataset == 'awi':
-            results.update(evaluate.validate_awi(model, args.iters))
+            input_image_width = 2464
+            if args.image_size[1] != input_image_width:
+                results.update(evaluate.validate_awi(model, args.iters, halve_image=True))
+            else:
+                results.update(evaluate.validate_awi(model, args.iters, halve_image=False))
 
     # Record results in logger
     for key in results.keys():

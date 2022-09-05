@@ -317,6 +317,10 @@ class AWI2(FlowDataset):
             fleece_dirs = VALIDATION_SPLIT_
         elif split == 'test':
             fleece_dirs = TEST_SPLIT_
+        elif split == 'gen':
+            # Setting to generate the flow for all available folders
+            fleece_dirs = sorted([f for f in os.listdir(flow_dir) if f.startswith('fleece')])
+            self.is_test = True
         else:
             reject_list = VALIDATION_SPLIT_ + TEST_SPLIT_
             fleece_dirs = sorted([f for f in os.listdir(flow_dir)

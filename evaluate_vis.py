@@ -357,10 +357,10 @@ def validate_kitti(model, iters=6):
 
 
 @torch.no_grad()
-def validate_awi(model, iters=6, save=False):
+def validate_awi(model, iters=6, halve_image=False, save=False):
     """ Perform validation using the AWI dataset """
     model.eval()
-    val_dataset = datasets.AWI(split='test', root=DATASET_ROOT['awi'])
+    val_dataset = datasets.AWI2(split='gen', root=DATASET_ROOT['awi'], halve_image=halve_image)
     print('Evaluating on {} image pairs'.format(len(val_dataset)))
     for val_id in tqdm(range(len(val_dataset))):
         image1, image2, frame_info = val_dataset[val_id]
@@ -409,6 +409,7 @@ if __name__ == '__main__':
     parser.add_argument('--small', action='store_true', help='use small model')
     parser.add_argument('--alternate_corr', action='store_true', help='use efficient correlation implementation')
     parser.add_argument('--save', action='store_true', help='save predictions to file')
+    parser.add_argument('--halve', action='store_true', help='halve the image')
     args = parser.parse_args()
 
     model = torch.nn.DataParallel(SparseNet(args))
@@ -436,4 +437,4 @@ if __name__ == '__main__':
             validate_kitti(model, iters=24)
 
         elif args.dataset == 'awi':
-            validate_awi(model, iters=32, save=args.save)
+            validate_awi(model, iters=32, halve_image=args.halve, save=args.save)

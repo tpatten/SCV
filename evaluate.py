@@ -173,10 +173,10 @@ def validate_kitti(model, iters=6):
 
 
 @torch.no_grad()
-def validate_awi(model, iters=6, save=False):
+def validate_awi(model, iters=6, halve_image=False):
     """ Perform validation using the AWI dataset """
     model.eval()
-    val_dataset = datasets.AWI2(split='validation', root=DATASET_ROOT['awi'])
+    val_dataset = datasets.AWI2(split='validation', root=DATASET_ROOT['awi'], halve_image=halve_image)
     print('Evaluating on {} image pairs'.format(len(val_dataset)))
 
     results = {}
