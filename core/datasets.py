@@ -47,6 +47,16 @@ class FlowDataset(data.Dataset):
             img2 = frame_utils.read_gen(self.image_list[index][1])
             img1 = np.array(img1).astype(np.uint8)[..., :3]
             img2 = np.array(img2).astype(np.uint8)[..., :3]
+
+            if self.halve_image:
+                half_width = int(img1.shape[1] / 2)
+                if self.extra_info[index]['camera'] == 'GX301187':
+                    img1 = img1[:, :half_width, :]
+                    img2 = img2[:, :half_width, :]
+                else:
+                    img1 = img1[:, half_width:, :]
+                    img2 = img2[:, half_width:, :]
+
             img1 = torch.from_numpy(img1).permute(2, 0, 1).float()
             img2 = torch.from_numpy(img2).permute(2, 0, 1).float()
             return img1, img2, self.extra_info[index]
@@ -291,7 +301,8 @@ class AWI(FlowDataset):
 
                         # self.image_list += [[image_1, image_2]]
                         self.image_list += [[image_2, image_1]]  # Reversing this because we want flow from after to before skirted
-                        self.extra_info += [{'scene': subdir, 'camera': c, 'frame': f.replace('.json', '')}]  # scene, camera and frame_id
+                        # scene, camera and frame_id with no extension
+                        self.extra_info += [{'scene': subdir, 'camera': c, 'frame': os.path.splitext(f)[0]}]
 
 
 class AWI2(FlowDataset):
@@ -346,7 +357,8 @@ class AWI2(FlowDataset):
 
                             self.image_list += [[image_2, image_1]]  # Reversing this because we want flow from after to before skirted
                             self.flow_list += [flow_file]
-                            self.extra_info += [{'scene': subdir, 'camera': c, 'frame': f.replace('.json', '')}]  # scene, camera and frame_id
+                            # scene, camera and frame_id with no extension
+                            self.extra_info += [{'scene': subdir, 'camera': c, 'frame': os.path.splitext(f)[0]}]
 
 
 def fetch_dataloader(args, TRAIN_DS='C+T+K+S+H'):
