@@ -20,7 +20,8 @@ from PIL import Image
 
 
 DATASET_ROOT = {'sintel': '/home/tpatten/Data/Opticalflow/Sintel',
-                'awi': '/home/tpatten/Data/AWI/AWI_Dataset'}
+                'awi': '/home/tpatten/Data/AWI/AWI_Dataset',
+                'awi_uv': '/home/tpatten/Data/AWI/TechLab_UV_Annotation'}
 
 
 class FlowDataset(data.Dataset):
@@ -366,10 +367,35 @@ class AWI2(FlowDataset):
                                 f.replace(os.path.splitext(f)[-1], '.png'))
                             image_2 = os.path.join(path_to_annotations, anno_data['correspondence'])
 
-                            self.image_list += [[image_2, image_1]]  # Reversing this because we want flow from after to before skirted
+                            self.image_list += [[image_2, image_1]]  # Reversing because we want flow from after to before skirted
                             self.flow_list += [flow_file]
                             # scene, camera and frame_id with no extension
                             self.extra_info += [{'scene': subdir, 'camera': c, 'frame': os.path.splitext(f)[0]}]
+
+
+class AWI_UV(FlowDataset):
+    def __init__(self, aug_params=None, split='gen', root='datasets/TechLab_UV_Annotation'):
+        super(AWI_UV, self).__init__(aug_params, sparse=False)
+
+        image_pairs = [('00_00_rgb.png', '00_02_rgb.png'),
+                       ('01_00_rgb.png', '01_02_rgb.png'),
+                       ('02_00_rgb.png', '02_02_rgb.png')]
+
+        if split == 'gen':
+            # Setting to generate the flow for all available folders
+            fleece_dirs = sorted([f for f in os.listdir(root) if f.startswith('fleece')])
+            self.is_test = True
+        else:
+            raise NotImplementedError
+
+        for subdir in fleece_dirs:
+            for image_p in image_pairs:
+                image_1 = os.path.join(root, image_p[0])
+                image_2 = os.path.join(root, image_p[1])
+
+                self.image_list += [[image_2, image_1]]  # Reversing because we want flow from after to before skirted
+                # scene and frame_id with no extension
+                self.extra_info += [{'scene': subdir, 'frame': os.path.splitext(image_p[0])[0]}]
 
 
 def fetch_dataloader(args, TRAIN_DS='C+T+K+S+H'):

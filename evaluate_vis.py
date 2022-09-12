@@ -397,6 +397,41 @@ def validate_awi(model, iters=6, halve_image=False, save=False):
             frame_utils.writeFlow(f'vis/awi/{fleece_id}/{camera}/flow/{ts}.flo', output_flow)
 
 
+@torch.no_grad()
+def validate_awi_uv(model, iters=6, save=False):
+    """ Perform validation using the AWI dataset with ground truth annotated by UV light """
+    model.eval()
+    val_dataset = datasets.AWI_UV(split='gen', root=DATASET_ROOT['awi_uv'])
+    print('Evaluating on {} image pairs'.format(len(val_dataset)))
+    for val_id in tqdm(range(len(val_dataset))):
+        image1, image2, frame_info = val_dataset[val_id]
+        image1 = image1[None].to(f'cuda:{model.device_ids[0]}')
+        image2 = image2[None].to(f'cuda:{model.device_ids[0]}')
+
+        padder = InputPadder(image1.shape)
+        image1, image2 = padder.pad(image1, image2)
+
+        flow_pr = model.module(image1, image2, iters=iters, test_mode=True)
+        flow = padder.unpad(flow_pr[0]).cpu()
+
+        # Visualizations
+        if save:
+            output_flow = flow.permute(1, 2, 0).numpy()
+            flow_img = flow_viz.flow_to_image(output_flow)
+            flow_img = Image.fromarray(flow_img)
+
+            fleece_id = frame_info['scene']
+            ts = frame_info['frame']
+
+            if not os.path.exists(f'vis/awi_uv/{fleece_id}/vis/'):
+                os.makedirs(f'vis/awi_uv/{fleece_id}/vis/')
+            if not os.path.exists(f'vis/awi_uv/{fleece_id}/flow/'):
+                os.makedirs(f'vis/awi_uv/{fleece_id}/flow/')
+
+            imageio.imwrite(f'vis/awi_uv/{fleece_id}/vis/{ts}.png', flow_img)
+            frame_utils.writeFlow(f'vis/awi_uv/{fleece_id}/flow/{ts}.flo', output_flow)
+
+
 if __name__ == '__main__':    
     parser = argparse.ArgumentParser()
     parser.add_argument('--model', help="restore checkpoint")
@@ -438,3 +473,6 @@ if __name__ == '__main__':
 
         elif args.dataset == 'awi':
             validate_awi(model, iters=32, halve_image=args.halve, save=args.save)
+
+        elif args.dataset == 'awi_uv':
+            validate_awi_uv(model, iters=32, save=args.save)
