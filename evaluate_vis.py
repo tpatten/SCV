@@ -25,15 +25,12 @@ from PIL import Image, ImageDraw, ImageFont
 import csv
 
 
-DATASET_ROOT = {'sintel': '/home/tpatten/Data/Opticalflow/Sintel',
-                'awi': '/home/tpatten/Data/AWI/AWI_Dataset'}
-
 @torch.no_grad()
 def create_sintel_submission(model, warm_start=False, output_path='sintel_submission'):
     """ Create submission for the Sintel leaderboard """
     model.eval()
     for dstype in ['clean', 'final']:
-        test_dataset = datasets.MpiSintel(split='test', aug_params=None, dstype=dstype, root=DATASET_ROOT['sintel'])
+        test_dataset = datasets.MpiSintel(split='test', aug_params=None, dstype=dstype, root=datasets.DATASET_ROOT['sintel'])
 
         flow_prev, sequence_prev = None, None
         for test_id in range(len(test_dataset)):
@@ -65,7 +62,7 @@ def create_sintel_submission_vis(model, warm_start=False, output_path='sintel_su
     """ Create submission for the Sintel leaderboard """
     model.eval()
     for dstype in ['clean', 'final']:
-        test_dataset = datasets.MpiSintel(split='test', aug_params=None, dstype=dstype, root=DATASET_ROOT['sintel'])
+        test_dataset = datasets.MpiSintel(split='test', aug_params=None, dstype=dstype, root=datasets.DATASET_ROOT['sintel'])
 
         flow_prev, sequence_prev = None, None
         for test_id in range(len(test_dataset)):
@@ -157,7 +154,7 @@ def validate_chairs(model, iters=6):
 def gen_sintel_image():
     """ Peform validation using the Sintel (train) split """
     for dstype in ['clean', 'final']:
-        val_dataset = datasets.MpiSintel(split='training', dstype=dstype, root=DATASET_ROOT['sintel'])
+        val_dataset = datasets.MpiSintel(split='training', dstype=dstype, root=datasets.DATASET_ROOT['sintel'])
         for val_id in range(len(val_dataset)):
             image1, image2, flow_gt, _, (sequence, frame) = val_dataset[val_id]
             image1 = image1.byte().permute(1,2,0)
@@ -168,7 +165,7 @@ def gen_sintel_image():
 def gen_sintel_gt():
     """ Peform validation using the Sintel (train) split """
     for dstype in ['clean', 'final']:
-        val_dataset = datasets.MpiSintel(split='training', dstype=dstype, root=DATASET_ROOT['sintel'])
+        val_dataset = datasets.MpiSintel(split='training', dstype=dstype, root=datasets.DATASET_ROOT['sintel'])
         for val_id in range(len(val_dataset)):
             image1, image2, flow_gt, _, (sequence, frame) = val_dataset[val_id]
 
@@ -186,7 +183,7 @@ def validate_sintel(model, warm_start=False, iters=6, save=False):
     #font = ImageFont.truetype("FUTURAL.ttf", 40)
     font = ImageFont.load_default()
     for dstype in ['clean', 'final']:
-        val_dataset = datasets.MpiSintel(split='training', dstype=dstype, root=DATASET_ROOT['sintel'])
+        val_dataset = datasets.MpiSintel(split='training', dstype=dstype, root=datasets.DATASET_ROOT['sintel'])
         epe_list = []
         flow_prev, sequence_prev = None, None
         for val_id in tqdm(range(len(val_dataset))):
@@ -360,7 +357,7 @@ def validate_kitti(model, iters=6):
 def validate_awi(model, iters=6, halve_image=False, save=False):
     """ Perform validation using the AWI dataset """
     model.eval()
-    val_dataset = datasets.AWI2(split='gen', root=DATASET_ROOT['awi'], halve_image=halve_image)
+    val_dataset = datasets.AWI2(split='gen', root=datasets.DATASET_ROOT['awi'], halve_image=halve_image)
     print('Evaluating on {} image pairs'.format(len(val_dataset)))
     for val_id in tqdm(range(len(val_dataset))):
         image1, image2, frame_info = val_dataset[val_id]
@@ -398,10 +395,10 @@ def validate_awi(model, iters=6, halve_image=False, save=False):
 
 
 @torch.no_grad()
-def validate_awi_uv(model, iters=6, save=False):
+def validate_awi_uv(model, iters=6, halve_image=False, save=False):
     """ Perform validation using the AWI dataset with ground truth annotated by UV light """
     model.eval()
-    val_dataset = datasets.AWI_UV(split='gen', root=DATASET_ROOT['awi_uv'])
+    val_dataset = datasets.AWI_UV(split='gen', root=datasets.DATASET_ROOT['awi_uv'], halve_image=halve_image)
     print('Evaluating on {} image pairs'.format(len(val_dataset)))
     for val_id in tqdm(range(len(val_dataset))):
         image1, image2, frame_info = val_dataset[val_id]
@@ -475,4 +472,4 @@ if __name__ == '__main__':
             validate_awi(model, iters=32, halve_image=args.halve, save=args.save)
 
         elif args.dataset == 'awi_uv':
-            validate_awi_uv(model, iters=32, save=args.save)
+            validate_awi_uv(model, iters=32, halve_image=args.halve, save=args.save)
