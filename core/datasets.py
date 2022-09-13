@@ -54,9 +54,19 @@ class FlowDataset(data.Dataset):
                 if self.extra_info[index]['camera'] == 'GX301187':
                     img1 = img1[:, :half_width, :]
                     img2 = img2[:, :half_width, :]
-                else:
+                elif self.extra_info[index]['camera'] == 'GX300643':
                     img1 = img1[:, half_width:, :]
                     img2 = img2[:, half_width:, :]
+                elif self.extra_info[index]['camera'] == 'uv':
+                    # Use the mask to crop the image
+                    msk = np.asarray(Image.open(self.extra_info[index]['mask'])).astype(np.uint8)
+                    valid_cols = np.where(msk > 0)[-1]
+                    max_valid_col = valid_cols.max()
+                    max_valid_col = min(img1.shape[1] - 1, max_valid_col + 50)
+                    img1 = img1[:, max_valid_col - half_width:max_valid_col, :]
+                    img2 = img2[:, max_valid_col - half_width:max_valid_col, :]
+                else:
+                    raise NotImplementedError
 
             img1 = torch.from_numpy(img1).permute(2, 0, 1).float()
             img2 = torch.from_numpy(img2).permute(2, 0, 1).float()
@@ -393,9 +403,14 @@ class AWI_UV(FlowDataset):
                 image_1 = os.path.join(root, subdir, image_p[0])
                 image_2 = os.path.join(root, subdir, image_p[1])
 
+                mask_1 = os.path.join(root, 'masks', subdir, image_p[0])
+                if not os.path.exists(mask_1):
+                    mask_1 = mask_1.replace('rgb', 'mask')
+
                 self.image_list += [[image_2, image_1]]  # Reversing because we want flow from after to before skirted
                 # scene and frame_id with no extension
-                self.extra_info += [{'scene': subdir, 'camera': 'GX300643', 'frame': os.path.splitext(image_p[0])[0]}]
+                self.extra_info += [{'scene': subdir, 'camera': 'uv', 'frame': os.path.splitext(image_p[0])[0],
+                                     'mask': mask_1}]
 
 
 def fetch_dataloader(args, TRAIN_DS='C+T+K+S+H'):
