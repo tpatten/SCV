@@ -172,7 +172,7 @@ def validate_kitti(model, iters=6):
 
 
 @torch.no_grad()
-def validate_awi_uv(model, iters=24, halve_image=False):  # iters=6 is original, now changed to 24
+def validate_awi_uv(model, iters=24, halve_image=False, save=False):  # iters=6 is original, now changed to 24
     """ Perform validation using the AWI UV dataset """
     model.eval()
     val_dataset = datasets.AWI_UV(split='validation', root=datasets.AWI_ROOT['awi_uv'], halve_image=halve_image)
@@ -197,16 +197,17 @@ def validate_awi_uv(model, iters=24, halve_image=False):  # iters=6 is original,
         epe_list.append(epe[val].mean().item())
 
         # Visualizations
-        output_flow = flow.permute(1, 2, 0).numpy()
-        flow_img = flow_viz.flow_to_image(output_flow)
-        flow_img = Image.fromarray(flow_img)
-        fleece_id, ts = val_dataset.extra_info[val_id]['scene'], val_dataset.extra_info[val_id]['frame']
-        if not os.path.exists(f'vis/awi/{fleece_id}/vis/'):
-            os.makedirs(f'vis/awi/{fleece_id}/vis/')
-        if not os.path.exists(f'vis/awi/{fleece_id}/flow/'):
-            os.makedirs(f'vis/awi/{fleece_id}/flow/')
-        imageio.imwrite(f'vis/awi/{fleece_id}/vis/{ts}.png', flow_img)
-        frame_utils.writeFlow(f'vis/awi/{fleece_id}/flow/{ts}.flo', output_flow)
+        if save:
+            output_flow = flow.permute(1, 2, 0).numpy()
+            flow_img = flow_viz.flow_to_image(output_flow)
+            flow_img = Image.fromarray(flow_img)
+            fleece_id, ts = val_dataset.extra_info[val_id]['scene'], val_dataset.extra_info[val_id]['frame']
+            if not os.path.exists(f'vis/awi/{fleece_id}/vis/'):
+                os.makedirs(f'vis/awi/{fleece_id}/vis/')
+            if not os.path.exists(f'vis/awi/{fleece_id}/flow/'):
+                os.makedirs(f'vis/awi/{fleece_id}/flow/')
+            imageio.imwrite(f'vis/awi/{fleece_id}/vis/{ts}.png', flow_img)
+            frame_utils.writeFlow(f'vis/awi/{fleece_id}/flow/{ts}.flo', output_flow)
 
     epe_all = np.array(epe_list)
 

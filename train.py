@@ -222,12 +222,11 @@ def validate(model, args, logger):
             results.update(evaluate.validate_sintel(model.module, args.iters))
         elif val_dataset == 'kitti':
             results.update(evaluate.validate_kitti(model.module, args.iters))
-        elif val_dataset == 'awi':
-            input_image_width = 2464
-            if args.image_size[1] != input_image_width:
-                results.update(evaluate.validate_awi_uv(model, args.iters, halve_image=True))
+        elif val_dataset == 'awi_uv':
+            if args.image_size[1] != datasets.AWI_IMAGE_RES[val_dataset][1]:
+                results.update(evaluate.validate_awi_uv(model, args.iters, halve_image=True, save=args.save))
             else:
-                results.update(evaluate.validate_awi_uv(model, args.iters, halve_image=False))
+                results.update(evaluate.validate_awi_uv(model, args.iters, halve_image=False, save=args.save))
 
     # Record results in logger
     logger.push_validation(results)
@@ -302,6 +301,7 @@ if __name__ == '__main__':
 
     parser.add_argument('--mixed_precision', default=True, help='use mixed precision')
 
+    parser.add_argument('--save', action='store_true', help='save predictions to file')
     parser.add_argument('--wandb', action='store_true', help='log to wandb')
 
     args = parser.parse_args()

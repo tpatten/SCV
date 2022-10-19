@@ -354,14 +354,22 @@ def validate_kitti(model, iters=6):
 
 
 @torch.no_grad()
-def validate_awi(model, iters=6, halve_image=False, save=False):
-    """ Perform validation using the AWI dataset """
+def validate_awi_d(model, dataset_name, iters=6, halve_image=False, save=False):
+    """ Perform validation using the AWI Dubbo or Deniliquin datasets """
+    assert dataset_name in {'dubbo', 'deniliquin'}, 'Dataset must be named dubbo or deniliquin'
+
     model.eval()
-    val_dataset = datasets.AWI2(split='gen', root=datasets.DATASET_ROOT['awi'], halve_image=halve_image)
+    if dataset_name == 'dubbo':
+        val_dataset = datasets.AWI_Dubbo(split='test', root=datasets.AWI_ROOT['dubbo'], halve_image=halve_image)
+        out_dir = 'awi_dubbo'
+    elif dataset_name == 'deniliquin':
+        val_dataset = datasets.AWI_Deniliquon(split='test', root=datasets.AWI_ROOT['deniliquin'], halve_image=halve_image)
+        out_dir = 'awi_deniliquin'
+
     print('Evaluating on {} image pairs'.format(len(val_dataset)))
+
     for val_id in tqdm(range(len(val_dataset))):
         image1, image2, frame_info = val_dataset[val_id]
-        #print(image1.shape, flow_gt.shape)  # torch.Size([3, 436, 1024]) torch.Size([2, 436, 1024])
         image1 = image1[None].to(f'cuda:{model.device_ids[0]}')
         image2 = image2[None].to(f'cuda:{model.device_ids[0]}')
 
@@ -369,10 +377,7 @@ def validate_awi(model, iters=6, halve_image=False, save=False):
         image1, image2 = padder.pad(image1, image2)
 
         flow_pr = model.module(image1, image2, iters=iters, test_mode=True)
-        # print(image1.shape, flow_pr.shape)  # torch.Size([1, 3, 440, 1024]) torch.Size([1, 2, 440, 1024])
         flow = padder.unpad(flow_pr[0]).cpu()
-
-        #epe = torch.sum((flow - flow_gt)**2, dim=0).sqrt()
 
         # Visualizations
         if save:
@@ -380,26 +385,28 @@ def validate_awi(model, iters=6, halve_image=False, save=False):
             flow_img = flow_viz.flow_to_image(output_flow)
             flow_img = Image.fromarray(flow_img)
 
-            #fleece_id, camera, ts = frame_info
             fleece_id = frame_info['scene']
             camera = frame_info['camera']
             ts = frame_info['frame']
 
-            if not os.path.exists(f'vis/awi/{fleece_id}/{camera}/vis/'):
-                os.makedirs(f'vis/awi/{fleece_id}/{camera}/vis/')
-            if not os.path.exists(f'vis/awi/{fleece_id}/{camera}/flow/'):
-                os.makedirs(f'vis/awi/{fleece_id}/{camera}/flow/')
+            if not os.path.exists(f'vis/{out_dir}/{fleece_id}/{camera}/vis/'):
+                os.makedirs(f'vis/{out_dir}/{fleece_id}/{camera}/vis/')
+            if not os.path.exists(f'vis/{out_dir}/{fleece_id}/{camera}/flow/'):
+                os.makedirs(f'vis/{out_dir}/{fleece_id}/{camera}/flow/')
 
-            imageio.imwrite(f'vis/awi/{fleece_id}/{camera}/vis/{ts}.png', flow_img)
-            frame_utils.writeFlow(f'vis/awi/{fleece_id}/{camera}/flow/{ts}.flo', output_flow)
+            imageio.imwrite(f'vis/{out_dir}/{fleece_id}/{camera}/vis/{ts}.png', flow_img)
+            frame_utils.writeFlow(f'vis/{out_dir}/{fleece_id}/{camera}/flow/{ts}.flo', output_flow)
 
 
 @torch.no_grad()
 def validate_awi_uv(model, iters=6, halve_image=False, save=False):
     """ Perform validation using the AWI dataset with ground truth annotated by UV light """
     model.eval()
-    val_dataset = datasets.AWI_UV(split='gen', root=datasets.DATASET_ROOT['awi_uv'], halve_image=halve_image)
+    val_dataset = datasets.AWI_UV(split='test', root=datasets.AWI_ROOT['awi_uv'], halve_image=halve_image)
+    out_dir = 'awi_uv'
+
     print('Evaluating on {} image pairs'.format(len(val_dataset)))
+
     for val_id in tqdm(range(len(val_dataset))):
         image1, image2, frame_info = val_dataset[val_id]
         image1 = image1[None].to(f'cuda:{model.device_ids[0]}')
@@ -420,13 +427,13 @@ def validate_awi_uv(model, iters=6, halve_image=False, save=False):
             fleece_id = frame_info['scene']
             ts = frame_info['frame']
 
-            if not os.path.exists(f'vis/awi_uv/{fleece_id}/vis/'):
-                os.makedirs(f'vis/awi_uv/{fleece_id}/vis/')
-            if not os.path.exists(f'vis/awi_uv/{fleece_id}/flow/'):
-                os.makedirs(f'vis/awi_uv/{fleece_id}/flow/')
+            if not os.path.exists(f'vis/{out_dir}/{fleece_id}/vis/'):
+                os.makedirs(f'vis/{out_dir}/{fleece_id}/vis/')
+            if not os.path.exists(f'vis/{out_dir}/{fleece_id}/flow/'):
+                os.makedirs(f'vis/{out_dir}/{fleece_id}/flow/')
 
-            imageio.imwrite(f'vis/awi_uv/{fleece_id}/vis/{ts}.png', flow_img)
-            frame_utils.writeFlow(f'vis/awi_uv/{fleece_id}/flow/{ts}.flo', output_flow)
+            imageio.imwrite(f'vis/{out_dir}/{fleece_id}/vis/{ts}.png', flow_img)
+            frame_utils.writeFlow(f'vis/{out_dir}/{fleece_id}/flow/{ts}.flo', output_flow)
 
 
 if __name__ == '__main__':    
@@ -463,13 +470,12 @@ if __name__ == '__main__':
 
         elif args.dataset == 'sintel':
             validate_sintel(model, warm_start=False, iters=32, save=args.save)
-            # validate_sintel_sequence(model, warm_start=False, iters=32)
 
         elif args.dataset == 'kitti':
             validate_kitti(model, iters=24)
 
-        elif args.dataset == 'awi':
-            validate_awi(model, iters=32, halve_image=args.halve, save=args.save)
+        elif args.dataset == 'dubbo' or args.dataset == 'deniliquin':
+            validate_awi_d(model, args.dataset, iters=24, halve_image=args.halve, save=args.save)
 
         elif args.dataset == 'awi_uv':
-            validate_awi_uv(model, iters=32, halve_image=args.halve, save=args.save)
+            validate_awi_uv(model, iters=24, halve_image=args.halve, save=args.save)
