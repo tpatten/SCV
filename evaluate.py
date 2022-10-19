@@ -194,7 +194,8 @@ def validate_awi_uv(model, iters=24, halve_image=False, save=False):  # iters=6 
         epe = torch.sum((flow - flow_gt) ** 2, dim=0).sqrt()
         epe = epe.view(-1)
         val = valid_gt.reshape(-1) >= 0.5
-        epe_list.append(epe[val].mean().item())
+        if val.sum() > 0:
+            epe_list.append(epe[val].mean().item())
 
         # Visualizations
         if save:
