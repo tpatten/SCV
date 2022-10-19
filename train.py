@@ -24,8 +24,8 @@ from torch.cuda.amp import GradScaler
 
 import wandb
 
-# exclude extremly large displacements
-MAX_FLOW = 400
+# exclude extremely large displacements
+MAX_FLOW = 500
 
 
 def convert_flow_to_image(image1, flow):
@@ -87,6 +87,9 @@ class Logger:
         self.train_steps_list = []
         self.val_steps_list = []
         self.val_results_dict = {}
+        self.log_wandb = args.wandb
+        if self.log_wandb:
+            initialise_wandb()
 
     def _print_training_status(self):
         metrics_data = [np.mean(self.running_loss_dict[k]) for k in sorted(self.running_loss_dict.keys())]
@@ -119,6 +122,22 @@ class Logger:
         if self.total_steps % self.args.print_freq == self.args.print_freq-1:
             self._print_training_status()
             self.running_loss_dict = {}
+
+    def push_validation(self, metrics):
+        # Record results in logger
+        for key in metrics.keys():
+            if key not in self.val_results_dict.keys():
+                self.val_results_dict[key] = []
+            self.val_results_dict[key].append(metrics[key])
+
+        self.val_steps_list.append(self.total_steps)
+
+    def write_dict(self):
+        if self.log_wandb:
+            log_set = {'loss': self.train_epe_list[-1]}
+            for key in self.val_results_dict.keys():
+                log_set[key] = self.val_results_dict[key][-1]
+            wandb.log(log_set)
 
 
 def main(args):
@@ -183,8 +202,6 @@ def train(model, train_loader, optimizer, scheduler, logger, scaler, args):
             validate(model, args, logger)
             plot_train(logger, args)
             plot_val(logger, args)
-            if args.wandb:
-                log_wandb(logger)
             # PATH = args.output + f'/{logger.total_steps+1}_{args.name}.pth'
             PATH = args.output + f'/{args.name}.pth'
             torch.save(model.state_dict(), PATH)
@@ -208,17 +225,19 @@ def validate(model, args, logger):
         elif val_dataset == 'awi':
             input_image_width = 2464
             if args.image_size[1] != input_image_width:
-                results.update(evaluate.validate_awi(model, args.iters, halve_image=True))
+                results.update(evaluate.validate_awi_uv(model, args.iters, halve_image=True))
             else:
-                results.update(evaluate.validate_awi(model, args.iters, halve_image=False))
+                results.update(evaluate.validate_awi_uv(model, args.iters, halve_image=False))
 
     # Record results in logger
-    for key in results.keys():
-        if key not in logger.val_results_dict.keys():
-            logger.val_results_dict[key] = []
-        logger.val_results_dict[key].append(results[key])
+    logger.push_validation(results)
+    #for key in results.keys():
+    #    if key not in logger.val_results_dict.keys():
+    #        logger.val_results_dict[key] = []
+    #    logger.val_results_dict[key].append(results[key])
+    #logger.val_steps_list.append(logger.total_steps)
+    logger.write_dict()
 
-    logger.val_steps_list.append(logger.total_steps)
     model.train()
 
 
@@ -247,13 +266,6 @@ def plot_train(logger, args):
 
 def initialise_wandb():
     wandb.init(project='scv_optical_flow', entity='tpatten')
-
-
-def log_wandb(logger):
-    log_set = {'loss': logger.train_epe_list[-1]}
-    for key in logger.val_results_dict.keys():
-        log_set[key] = logger.val_results_dict[key][-1]
-    wandb.log(log_set)
 
 
 if __name__ == '__main__':

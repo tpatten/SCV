@@ -1,24 +1,23 @@
 import sys
 sys.path.append('core')
 
+from PIL import Image
 import argparse
 import os
 import time
 import numpy as np
 import torch
 from tqdm import tqdm
+import imageio
 
 from sparsenet import SparseNet
 # from sparsenet import SparseNetEighth
 
 import datasets
+from utils import flow_viz
 from utils import frame_utils
 
 from utils.utils import InputPadder, forward_interpolate
-
-
-DATASET_ROOT = {'sintel': '/home/tpatten/Data/Opticalflow/Sintel',
-                'awi': '/home/tpatten/Data/AWI/AWI_Dataset'}
 
 
 @torch.no_grad()
@@ -173,49 +172,41 @@ def validate_kitti(model, iters=6):
 
 
 @torch.no_grad()
-def validate_awi(model, iters=6, halve_image=False):
-    """ Perform validation using the AWI dataset """
+def validate_awi_uv(model, iters=24, halve_image=False):  # iters=6 is original, now changed to 24
+    """ Perform validation using the AWI UV dataset """
     model.eval()
-    val_dataset = datasets.AWI2(split='validation', root=DATASET_ROOT['awi'], halve_image=halve_image)
+    val_dataset = datasets.AWI_UV(split='validation', root=datasets.AWI_ROOT['awi_uv'], halve_image=halve_image)
     print('Evaluating on {} image pairs'.format(len(val_dataset)))
 
     results = {}
     epe_list = []
     for val_id in tqdm(range(len(val_dataset))):
         image1, image2, flow_gt, valid_gt = val_dataset[val_id]
-        #print(image1.shape, flow_gt.shape)  # torch.Size([3, 436, 1024]) torch.Size([2, 436, 1024])
         image1 = image1[None].to(f'cuda:{model.device_ids[0]}')
         image2 = image2[None].to(f'cuda:{model.device_ids[0]}')
 
         padder = InputPadder(image1.shape)
         image1, image2 = padder.pad(image1, image2)
 
-        flow_pr = model.module(image1, image2, iters=iters, test_mode=True)
-        # print(image1.shape, flow_pr.shape)  # torch.Size([1, 3, 440, 1024]) torch.Size([1, 2, 440, 1024])
+        _, flow_pr = model.module(image1, image2, iters=iters, test_mode=True)
         flow = padder.unpad(flow_pr[0]).cpu()
-
-        '''
-        # Visualizations
-        if save:
-            output_flow = flow.permute(1, 2, 0).numpy()
-            flow_img = flow_viz.flow_to_image(output_flow)
-            flow_img = Image.fromarray(flow_img)
-
-            fleece_id, camera, ts = frame_info
-
-            if not os.path.exists(f'vis/awi/{fleece_id}/{camera}/vis/'):
-                os.makedirs(f'vis/awi/{fleece_id}/{camera}/vis/')
-            if not os.path.exists(f'vis/awi/{fleece_id}/{camera}/flow/'):
-                os.makedirs(f'vis/awi/{fleece_id}/{camera}/flow/')
-
-            imageio.imwrite(f'vis/awi/{fleece_id}/{camera}/vis/{ts}.png', flow_img)
-            frame_utils.writeFlow(f'vis/awi/{fleece_id}/{camera}/flow/{ts}.flo', output_flow)
-        '''
 
         epe = torch.sum((flow - flow_gt) ** 2, dim=0).sqrt()
         epe = epe.view(-1)
         val = valid_gt.reshape(-1) >= 0.5
         epe_list.append(epe[val].mean().item())
+
+        # Visualizations
+        output_flow = flow.permute(1, 2, 0).numpy()
+        flow_img = flow_viz.flow_to_image(output_flow)
+        flow_img = Image.fromarray(flow_img)
+        fleece_id, ts = val_dataset.extra_info[val_id]['scene'], val_dataset.extra_info[val_id]['frame']
+        if not os.path.exists(f'vis/awi/{fleece_id}/vis/'):
+            os.makedirs(f'vis/awi/{fleece_id}/vis/')
+        if not os.path.exists(f'vis/awi/{fleece_id}/flow/'):
+            os.makedirs(f'vis/awi/{fleece_id}/flow/')
+        imageio.imwrite(f'vis/awi/{fleece_id}/vis/{ts}.png', flow_img)
+        frame_utils.writeFlow(f'vis/awi/{fleece_id}/flow/{ts}.flo', output_flow)
 
     epe_all = np.array(epe_list)
 
