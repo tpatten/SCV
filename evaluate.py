@@ -188,7 +188,7 @@ def validate_awi_uv(model, iters=24, halve_image=False, save=False):  # iters=6 
         padder = InputPadder(image1.shape)
         image1, image2 = padder.pad(image1, image2)
 
-        _, flow_pr = model.module(image1, image2, iters=iters, test_mode=True)
+        flow_pr = model.module(image1, image2, iters=iters, test_mode=True)
         flow = padder.unpad(flow_pr[0]).cpu()
 
         epe = torch.sum((flow - flow_gt) ** 2, dim=0).sqrt()
