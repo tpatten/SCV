@@ -7,4 +7,6 @@
 
 #python -u train.py --name scv-kitti --stage kitti --validation kitti --output outputs/kitti --num_steps 120000 --lr 0.00025 --image_size 288 960 --wdecay 0.0001 --gpus 0 1 --num_k 8 --batch_size 4 --iters 8 --val_freq 10000 --print_freq 100 --checkpoint outputs/sintel/scv-sintel.pth
 
-python3 -u train.py --name scv-awi --stage dubbo --validation awi_uv --output outputs/awi --num_steps 50000 --lr 0.00025 --image_size 600 1232 --wdecay 0.0001 --gpus 0 --num_k 8 --batch_size 2 --iters 8 --val_freq 1000 --print_freq 100 --restore_ckpt /home/tpatten/Code/SCV/checkpoints/quarter/scv-sintel.pth --save
+#python3 -u train.py --name scv-awi --stage dubbo --validation awi_uv --output outputs/scv_awi_dubbo --num_steps 50000 --lr 0.00025 --image_size 600 1232 --wdecay 0.0001 --gpus 0 --num_k 8 --batch_size 2 --iters 8 --val_freq 1000 --print_freq 100 --restore_ckpt /home/tpatten/Code/SCV/checkpoints/quarter/scv-sintel.pth --save --wandb
+
+python3 -u train.py --name scv-awi --stage deniliquin --validation awi_uv --output outputs/scv_awi_deniliquin --num_steps 50000 --lr 0.00025 --image_size 1028 1232 --wdecay 0.0001 --gpus 0 --num_k 8 --batch_size 2 --iters 8 --val_freq 1000 --print_freq 100 --restore_ckpt /home/tpatten/Code/SCV/checkpoints/quarter/scv-sintel.pth --save --wand
