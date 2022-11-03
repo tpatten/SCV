@@ -21,11 +21,13 @@ from PIL import Image
 
 AWI_ROOT = {'dubbo': '/home/tpatten/Data/AWI/AWI_Dataset',
             'deniliquin': '/home/tpatten/Data/AWI/AWI_Dataset_2',
-            'awi_uv': '/home/tpatten/Data/AWI/TechLab_UV_Annotation'}
+            'awi_uv': '/home/tpatten/Data/AWI/TechLab_UV_Annotation',
+            'awi_markers': '/home/tpatten/Data/AWI/TechLab_Colour_Annotation'}
 
 AWI_IMAGE_RES = {'dubbo': (600, 2464),
                  'deniliquin': (1028, 2464),
-                 'awi_uv': (1028, 2464)}
+                 'awi_uv': (1028, 2464),
+                 'awi_markers': (1028, 2464)}
 
 AWI_UV_EPS = 50
 
@@ -64,7 +66,7 @@ class FlowDataset(data.Dataset):
                 elif self.extra_info[index]['camera'] == 'GX300643':
                     img1 = img1[:, half_width:, :]
                     img2 = img2[:, half_width:, :]
-                elif self.extra_info[index]['camera'] == 'uv':
+                elif self.extra_info[index]['camera'] == 'uv' or self.extra_info[index]['camera'] == 'markers':
                     # Use the mask to crop the image
                     msk = np.asarray(Image.open(self.extra_info[index]['mask'])).astype(np.uint8)
                     valid_cols = np.where(msk > 0)[-1]
@@ -367,6 +369,41 @@ class AWI_UV(FlowDataset):
                 self.image_list += [[image_2, image_1]]  # Reverse because want flow from after to before skirted
                 self.flow_list += [flow_file]
                 self.extra_info += [{'scene': subdir, 'camera': 'uv', 'frame': os.path.splitext(image_p[0])[0],
+                                     'mask': mask_1}]
+
+
+class AWI_Markers(FlowDataset):
+    def __init__(self, aug_params=None, halve_image=False, split='test', root=''):
+        super(AWI_Markers, self).__init__(aug_params, sparse=False, halve_image=halve_image)
+
+        image_pairs = [('00_00.png', '00_02.png'),
+                       ('01_00.png', '01_02.png'),
+                       ('02_00.png', '02_02.png')]
+        flow_dir = 'flows'
+        mask_dir = 'masks'
+
+        if split == 'test':
+            self.is_test = True
+
+        # Setting to generate the flow for all available folders
+        fleece_dirs = sorted([f for f in os.listdir(root) if f.startswith('fleece')])
+
+        for subdir in fleece_dirs:
+            for image_p in image_pairs:
+                image_1 = os.path.join(root, subdir, image_p[0])
+                image_2 = os.path.join(root, subdir, image_p[1])
+
+                flow_file = os.path.join(root, flow_dir, subdir, image_p[0].replace('.png', '.mat'))
+                if not os.path.exists(flow_file):
+                    flow_file = None
+
+                mask_1 = os.path.join(root, mask_dir, subdir, image_p[0].replace('.png', '_mask.png'))
+                if not os.path.exists(mask_1):
+                    raise RuntimeError('No mask file {} for image {}'.format(mask_1, image_1))
+
+                self.image_list += [[image_2, image_1]]  # Reverse because want flow from after to before skirted
+                self.flow_list += [flow_file]
+                self.extra_info += [{'scene': subdir, 'camera': 'markers', 'frame': os.path.splitext(image_p[0])[0],
                                      'mask': mask_1}]
 
 
